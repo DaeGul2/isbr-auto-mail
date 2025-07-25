@@ -1,0 +1,286 @@
+import React, { useState, useRef } from 'react';
+import * as XLSX from 'xlsx';
+import {
+  Container,
+  Typography,
+  Paper,
+  TextField,
+  Button,
+  Box,
+  Chip,
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  MobileStepper,
+} from '@mui/material';
+import KeyboardArrowLeft from '@mui/icons-material/KeyboardArrowLeft';
+import KeyboardArrowRight from '@mui/icons-material/KeyboardArrowRight';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import { sendEmail } from '../services/emailService';
+
+const ComposeEmailPage = () => {
+  const [columns, setColumns] = useState([]);
+  const [excelData, setExcelData] = useState([]);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+  const [smtpDialogOpen, setSmtpDialogOpen] = useState(false);
+  const [smtpInfo, setSmtpInfo] = useState({ email: '', password: '' });
+  const [sendResults, setSendResults] = useState([]);
+  const quillRef = useRef(null); // ✅ Quill Editor ref
+
+  const handleExcelUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const wb = XLSX.read(evt.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      const headers = data[0];
+      const rows = data.slice(1);
+
+      if (!headers.includes('email')) {
+        alert('"email"이라는 컬럼이 엑셀의 첫 행에 반드시 포함되어야 합니다.');
+        setColumns([]);
+        setExcelData([]);
+        return;
+      }
+
+      setColumns(headers);
+      setExcelData(rows);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const applyTemplate = (template, row, headers) => {
+    let result = template;
+    headers.forEach((header, idx) => {
+      const regex = new RegExp(`{{\\s*${header}\\s*}}`, 'g');
+      result = result.replace(regex, row[idx]);
+    });
+    return result;
+  };
+
+  const handleInsertTag = (tag) => {
+    const editor = quillRef.current?.getEditor();
+    if (editor) {
+      const cursorPos = editor.getSelection()?.index ?? editor.getLength();
+      editor.insertText(cursorPos, tag);
+      editor.setSelection(cursorPos + tag.length);
+    }
+  };
+
+  const handlePreview = () => {
+    if (!title || !body || columns.length === 0 || excelData.length === 0) {
+      alert('엑셀과 제목/본문을 모두 입력해주세요.');
+      return;
+    }
+    setPreviewOpen(true);
+    setActiveStep(0);
+  };
+
+  const handleSend = () => {
+    setSmtpDialogOpen(true);
+  };
+
+  const confirmSend = async () => {
+    if (!smtpInfo.email || !smtpInfo.password) {
+      alert('이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+
+    const results = [];
+
+    for (let i = 0; i < excelData.length; i++) {
+      const row = excelData[i];
+      const personalizedTitle = applyTemplate(title, row, columns);
+      const personalizedBody = applyTemplate(body, row, columns);
+      const recipient = row[columns.indexOf('email')];
+
+      try {
+        await sendEmail({
+          title: personalizedTitle,
+          sender: smtpInfo.email,
+          recipient,
+          email_html: personalizedBody,
+          smtpPass: smtpInfo.password,
+        });
+        results.push({ row: i + 1, recipient, success: true });
+      } catch (err) {
+        results.push({ row: i + 1, recipient, success: false, error: err.message });
+      }
+    }
+
+    setSendResults(results);
+    setSmtpDialogOpen(false);
+  };
+
+  return (
+    <Container maxWidth="md" sx={{ mt: 4 }}>
+      <Typography variant="h4" gutterBottom>메일 작성</Typography>
+
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="subtitle1">1. 엑셀 업로드</Typography>
+        <Button variant="outlined" component="label">
+          엑셀 파일 선택
+          <input type="file" hidden accept=".xlsx, .xls" onChange={handleExcelUpload} />
+        </Button>
+
+        {columns.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2">사용 가능한 변수 태그 (클릭 시 본문에 삽입):</Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              {columns.map((col) => (
+                <Chip
+                  key={col}
+                  label={`{{${col}}}`}
+                  size="small"
+                  clickable
+                  onClick={() => handleInsertTag(`{{${col}}}`)}
+                />
+              ))}
+            </Stack>
+          </Box>
+        )}
+      </Paper>
+
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="subtitle1">2. 제목 및 본문 작성</Typography>
+        <TextField
+          fullWidth
+          label="제목"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          sx={{ mb: 2 }}
+        />
+        <ReactQuill
+          ref={quillRef}
+          value={body}
+          onChange={setBody}
+          modules={{
+            toolbar: [
+              [{ header: [1, 2, 3, false] }],
+              ['bold', 'italic', 'underline', 'strike'],
+              [{ color: [] }, { background: [] }],
+              [{ align: [] }],
+              ['link', 'image'],
+              ['clean'],
+            ],
+          }}
+          formats={[
+            'header', 'bold', 'italic', 'underline', 'strike',
+            'color', 'background', 'align', 'link', 'image',
+          ]}
+          style={{ height: '300px', marginBottom: '2rem' }}
+        />
+      </Paper>
+
+      <Stack direction="row" spacing={2}>
+        <Button variant="outlined" onClick={handlePreview}>미리보기</Button>
+        <Button variant="contained" onClick={handleSend} disabled={!excelData.length}>
+          보내기
+        </Button>
+      </Stack>
+
+      {previewOpen && (
+        <Paper sx={{ p: 3, mt: 4 }}>
+          <Typography variant="subtitle1">
+            미리보기 {activeStep + 1} / {excelData.length}
+          </Typography>
+          <Typography variant="h6" gutterBottom>
+            제목: {applyTemplate(title, excelData[activeStep], columns)}
+          </Typography>
+          <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+            <div
+              dangerouslySetInnerHTML={{
+                __html: applyTemplate(body, excelData[activeStep], columns),
+              }}
+            />
+          </Paper>
+
+          <MobileStepper
+            steps={excelData.length}
+            position="static"
+            activeStep={activeStep}
+            nextButton={
+              <Button size="small" onClick={() => setActiveStep((s) => s + 1)} disabled={activeStep === excelData.length - 1}>
+                다음
+                <KeyboardArrowRight />
+              </Button>
+            }
+            backButton={
+              <Button size="small" onClick={() => setActiveStep((s) => s - 1)} disabled={activeStep === 0}>
+                <KeyboardArrowLeft />
+                이전
+              </Button>
+            }
+          />
+        </Paper>
+      )}
+
+      <Dialog open={smtpDialogOpen} onClose={() => setSmtpDialogOpen(false)}>
+        <DialogTitle>이메일 로그인 정보 입력</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            margin="dense"
+            label="메일플러그 이메일"
+            value={smtpInfo.email}
+            onChange={(e) => setSmtpInfo((p) => ({ ...p, email: e.target.value }))}
+          />
+          <TextField
+            fullWidth
+            type="password"
+            margin="dense"
+            label="비밀번호"
+            value={smtpInfo.password}
+            onChange={(e) => setSmtpInfo((p) => ({ ...p, password: e.target.value }))}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSmtpDialogOpen(false)}>취소</Button>
+          <Button variant="contained" onClick={confirmSend}>보내기</Button>
+        </DialogActions>
+      </Dialog>
+
+      {sendResults.length > 0 && (
+        <Paper sx={{ mt: 4, p: 2 }}>
+          <Typography variant="h6">전송 결과</Typography>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>#</TableCell>
+                <TableCell>수신자</TableCell>
+                <TableCell>결과</TableCell>
+                <TableCell>오류</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {sendResults.map((r, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>{r.row}</TableCell>
+                  <TableCell>{r.recipient}</TableCell>
+                  <TableCell>{r.success ? '성공' : '실패'}</TableCell>
+                  <TableCell>{r.error || '-'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Paper>
+      )}
+    </Container>
+  );
+};
+
+export default ComposeEmailPage;
