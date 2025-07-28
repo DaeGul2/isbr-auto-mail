@@ -1,7 +1,18 @@
 import API from './api';
 
-export const sendEmail = async (data) => {
-  const res = await API.post('/emails', data);
+export const sendEmail = async (payload, files = []) => {
+  const form = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    form.append(key, value);
+  });
+  files.forEach((file) => {
+    form.append('attachments', file);
+  });
+
+  const res = await API.post('/emails', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+
   return res.data;
 };
 

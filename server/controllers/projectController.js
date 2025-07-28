@@ -1,4 +1,4 @@
-const { Project, Email } = require('../db');
+const { Project, Email, EmailFile } = require('../db');
 
 // ✅ 프로젝트 목록 조회 (이미 구현됨)
 const getAllProjects = async (req, res) => {
@@ -85,13 +85,27 @@ const getEmailsByProject = async (req, res) => {
     order: [['id', 'DESC']],
     limit,
     offset,
+    include: {
+      model: EmailFile,
+      as: 'files',
+      attributes: ['id'], // 이름, 경로는 굳이 필요 없음. 갯수 확인용
+    },
+
   });
+  const emails = result.rows.map((email) => {
+    const plain = email.toJSON();
+    return {
+      ...plain,
+      hasAttachment: plain.files && plain.files.length > 0,
+    };
+  });
+
 
   res.json({
     total: result.count,
     page,
     limit,
-    emails: result.rows,
+    emails
   });
 };
 

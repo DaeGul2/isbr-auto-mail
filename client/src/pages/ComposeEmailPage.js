@@ -1,26 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
-  Container,
-  Typography,
-  Paper,
-  TextField,
-  Button,
-  Box,
-  Chip,
-  Stack,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  MobileStepper,
-  Select,
-  MenuItem,
+  Container, Typography, Paper, TextField, Button, Box,
+  Chip, Stack, Dialog, DialogTitle, DialogContent,
+  DialogActions, Table, TableHead, TableBody,
+  TableRow, TableCell, MobileStepper, Select, MenuItem,
 } from '@mui/material';
 import KeyboardArrowLeft from '@mui/icons-material/KeyboardArrowLeft';
 import KeyboardArrowRight from '@mui/icons-material/KeyboardArrowRight';
@@ -42,6 +26,7 @@ const ComposeEmailPage = () => {
   const [projectList, setProjectList] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [newProjectName, setNewProjectName] = useState('');
+  const [attachments, setAttachments] = useState([]); // ✅ 첨부파일
   const quillRef = useRef(null);
 
   useEffect(() => {
@@ -65,10 +50,8 @@ const ComposeEmailPage = () => {
       const rows = data.slice(1);
 
       if (!headers.includes('email')) {
-        alert('"email"이라는 컬럼이 엑셀의 첫 행에 반드시 포함되어야 합니다.');
-        setColumns([]);
-        setExcelData([]);
-        return;
+        alert('"email" 컬럼이 필수입니다.');
+        setColumns([]); setExcelData([]); return;
       }
 
       setColumns(headers);
@@ -89,15 +72,19 @@ const ComposeEmailPage = () => {
   const handleInsertTag = (tag) => {
     const editor = quillRef.current?.getEditor();
     if (editor) {
-      const cursorPos = editor.getSelection()?.index ?? editor.getLength();
-      editor.insertText(cursorPos, tag);
-      editor.setSelection(cursorPos + tag.length);
+      const cursor = editor.getSelection()?.index ?? editor.getLength();
+      editor.insertText(cursor, tag);
+      editor.setSelection(cursor + tag.length);
     }
+  };
+
+  const handleFileChange = (e) => {
+    setAttachments(Array.from(e.target.files));
   };
 
   const handlePreview = () => {
     if (!title || !body || columns.length === 0 || excelData.length === 0) {
-      alert('엑셀과 제목/본문을 모두 입력해주세요.');
+      alert('엑셀, 제목, 본문 모두 입력해주세요.');
       return;
     }
     setPreviewOpen(true);
@@ -106,7 +93,7 @@ const ComposeEmailPage = () => {
 
   const handleSend = () => {
     if (!selectedProjectId) {
-      alert('📌 프로젝트를 선택해주세요.');
+      alert('프로젝트를 선택해주세요.');
       return;
     }
     setSmtpDialogOpen(true);
@@ -134,7 +121,8 @@ const ComposeEmailPage = () => {
           email_html: personalizedBody,
           smtpPass: smtpInfo.password,
           projectId: selectedProjectId,
-        });
+        }, attachments); // ✅ 파일 포함
+
         results.push({ row: i + 1, recipient, success: true });
       } catch (err) {
         results.push({ row: i + 1, recipient, success: false, error: err.message });
@@ -156,48 +144,33 @@ const ComposeEmailPage = () => {
           엑셀 파일 선택
           <input type="file" hidden accept=".xlsx, .xls" onChange={handleExcelUpload} />
         </Button>
-
         {columns.length > 0 && (
           <Box sx={{ mt: 2 }}>
-            <Typography variant="body2">사용 가능한 변수 태그 (클릭 시 본문에 삽입):</Typography>
+            <Typography variant="body2">사용 가능한 변수 태그:</Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap">
               {columns.map((col) => (
-                <Chip
-                  key={col}
-                  label={`{{${col}}}`}
-                  size="small"
-                  clickable
-                  onClick={() => handleInsertTag(`{{${col}}}`)}
-                />
+                <Chip key={col} label={`{{${col}}}`} onClick={() => handleInsertTag(`{{${col}}}`)} />
               ))}
             </Stack>
           </Box>
         )}
       </Paper>
 
-      {/* 프로젝트 선택 및 생성 */}
+      {/* 프로젝트 선택 */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="subtitle1">2. 프로젝트 선택</Typography>
-
-        <Select
-          fullWidth
-          displayEmpty
-          value={selectedProjectId}
-          onChange={(e) => setSelectedProjectId(e.target.value)}
-          sx={{ mb: 2 }}
-        >
+        <Select fullWidth value={selectedProjectId} displayEmpty onChange={(e) => setSelectedProjectId(e.target.value)} sx={{ mb: 2 }}>
           <MenuItem value="">(선택 안 됨)</MenuItem>
           {projectList.map((p) => (
             <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
           ))}
         </Select>
-
         <Stack direction="row" spacing={2}>
           <TextField
             label="새 프로젝트명"
+            fullWidth
             value={newProjectName}
             onChange={(e) => setNewProjectName(e.target.value)}
-            fullWidth
           />
           <Button
             variant="outlined"
@@ -214,12 +187,11 @@ const ComposeEmailPage = () => {
         </Stack>
       </Paper>
 
-      {/* 제목/본문 작성 */}
+      {/* 제목/본문 + 첨부 */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="subtitle1">3. 제목 및 본문 작성</Typography>
         <TextField
-          fullWidth
-          label="제목"
+          fullWidth label="제목"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           sx={{ mb: 2 }}
@@ -229,21 +201,22 @@ const ComposeEmailPage = () => {
           value={body}
           onChange={setBody}
           modules={{
-            toolbar: [
-              [{ header: [1, 2, 3, false] }],
-              ['bold', 'italic', 'underline', 'strike'],
-              [{ color: [] }, { background: [] }],
-              [{ align: [] }],
-              ['link', 'image'],
-              ['clean'],
-            ],
+            toolbar: [['bold', 'italic'], ['link'], ['clean']],
           }}
-          formats={[
-            'header', 'bold', 'italic', 'underline', 'strike',
-            'color', 'background', 'align', 'link', 'image',
-          ]}
-          style={{ height: '300px', marginBottom: '2rem' }}
+          style={{ height: 250, marginBottom: 20 }}
         />
+
+        {/* ✅ 파일 첨부 */}
+        <Typography variant="subtitle1">📎 첨부파일</Typography>
+        <Button component="label" variant="outlined">
+          파일 선택
+          <input type="file" hidden multiple onChange={handleFileChange} />
+        </Button>
+        <ul>
+          {attachments.map((f, i) => (
+            <li key={i}>{f.name} ({Math.round(f.size / 1024)} KB)</li>
+          ))}
+        </ul>
       </Paper>
 
       <Stack direction="row" spacing={2}>
@@ -256,63 +229,31 @@ const ComposeEmailPage = () => {
       {/* 미리보기 */}
       {previewOpen && (
         <Paper sx={{ p: 3, mt: 4 }}>
-          <Typography variant="subtitle1">
-            미리보기 {activeStep + 1} / {excelData.length}
-          </Typography>
-          <Typography variant="h6" gutterBottom>
-            제목: {applyTemplate(title, excelData[activeStep], columns)}
-          </Typography>
-          <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-            <div
-              dangerouslySetInnerHTML={{
-                __html: applyTemplate(body, excelData[activeStep], columns),
-              }}
-            />
+          <Typography variant="subtitle1">미리보기 {activeStep + 1} / {excelData.length}</Typography>
+          <Typography variant="h6">제목: {applyTemplate(title, excelData[activeStep], columns)}</Typography>
+          <Paper variant="outlined" sx={{ p: 2, mt: 1 }}>
+            <div dangerouslySetInnerHTML={{ __html: applyTemplate(body, excelData[activeStep], columns) }} />
           </Paper>
-
           <MobileStepper
             steps={excelData.length}
             position="static"
             activeStep={activeStep}
-            nextButton={
-              <Button size="small" onClick={() => setActiveStep((s) => s + 1)} disabled={activeStep === excelData.length - 1}>
-                다음
-                <KeyboardArrowRight />
-              </Button>
-            }
-            backButton={
-              <Button size="small" onClick={() => setActiveStep((s) => s - 1)} disabled={activeStep === 0}>
-                <KeyboardArrowLeft />
-                이전
-              </Button>
-            }
+            nextButton={<Button size="small" onClick={() => setActiveStep((s) => s + 1)} disabled={activeStep === excelData.length - 1}>다음<KeyboardArrowRight /></Button>}
+            backButton={<Button size="small" onClick={() => setActiveStep((s) => s - 1)} disabled={activeStep === 0}><KeyboardArrowLeft />이전</Button>}
           />
         </Paper>
       )}
 
       {/* SMTP 다이얼로그 */}
       <Dialog open={smtpDialogOpen} onClose={() => setSmtpDialogOpen(false)}>
-        <DialogTitle>이메일 로그인 정보 입력</DialogTitle>
+        <DialogTitle>이메일 로그인 정보</DialogTitle>
         <DialogContent>
-          <TextField
-            fullWidth
-            margin="dense"
-            label="메일플러그 이메일"
-            value={smtpInfo.email}
-            onChange={(e) => setSmtpInfo((p) => ({ ...p, email: e.target.value }))}
-          />
-          <TextField
-            fullWidth
-            type="password"
-            margin="dense"
-            label="비밀번호"
-            value={smtpInfo.password}
-            onChange={(e) => setSmtpInfo((p) => ({ ...p, password: e.target.value }))}
-          />
+          <TextField fullWidth margin="dense" label="이메일" value={smtpInfo.email} onChange={(e) => setSmtpInfo((p) => ({ ...p, email: e.target.value }))} />
+          <TextField fullWidth type="password" margin="dense" label="비밀번호" value={smtpInfo.password} onChange={(e) => setSmtpInfo((p) => ({ ...p, password: e.target.value }))} />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSmtpDialogOpen(false)}>취소</Button>
-          <Button variant="contained" onClick={confirmSend}>보내기</Button>
+          <Button onClick={confirmSend} variant="contained">보내기</Button>
         </DialogActions>
       </Dialog>
 

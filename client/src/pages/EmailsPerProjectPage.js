@@ -142,7 +142,7 @@ const EmailsPerProjectPage = () => {
                     sx={{ cursor: 'pointer' }}
                     onClick={() => navigate(`/emails/${email.id}`)}
                   >
-                    <TableCell>{email.title}</TableCell>
+                    <TableCell>{email.title}{email.files?.length > 0 && '📎'}</TableCell>
                     <TableCell>{email.recipient}</TableCell>
                     <TableCell>{email.status}</TableCell>
                     <TableCell>{email.comment || '-'}</TableCell>

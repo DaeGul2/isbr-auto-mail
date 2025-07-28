@@ -1,15 +1,12 @@
-const { Email } = require('../db');
-const nodemailer = require('nodemailer');
-const { v4: uuidv4 } = require('uuid');
-const { Op } = require('sequelize');
-const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
-const { EmailFile } = require('../db');
-const multer = require('multer');
-const upload = multer({ dest: 'server/tmp' }); // 파일 임시 저장 폴더
-dotenv.config(); // ✅ .env 로드
-// ✅ 이메일 생성 + 전송
+const { v4: uuidv4 } = require('uuid');
+const nodemailer = require('nodemailer');
+const dotenv = require('dotenv');
+const { Email, EmailFile } = require('../db');
+dotenv.config();
+
+// ✅ 이메일 생성 + 전송 + 첨부 저장
 const createAndSendEmail = async (req, res) => {
   try {
     const {
@@ -18,8 +15,10 @@ const createAndSendEmail = async (req, res) => {
       recipient,
       email_html,
       smtpPass,
-      projectId, // ✅ 추가된 필드
+      projectId,
     } = req.body;
+
+    const files = req.files || [];
 
     if (!sender || !smtpPass) {
       return res.status(400).json({ message: '이메일 계정정보가 필요합니다.' });
@@ -29,7 +28,6 @@ const createAndSendEmail = async (req, res) => {
       host: 'smtp.mailplug.co.kr',
       port: 465,
       secure: true,
-      service: 'Mailplug',
       auth: {
         user: sender,
         pass: smtpPass,
@@ -37,19 +35,8 @@ const createAndSendEmail = async (req, res) => {
     });
 
     const token = uuidv4();
-
     const responseUrl = `${process.env.RESPONSE_URL}/respond/${token}`;
-    const responseButtonHtml = `
-      <div style="margin-top:30px;text-align:center;">
-        <a href="${responseUrl}" 
-           style="background-color:#1976d2;color:white;padding:10px 20px;
-                  text-decoration:none;border-radius:5px;display:inline-block;">
-          응답하러 가기
-        </a>
-      </div>
-    `;
-
-    const finalHtml = `${email_html}${responseButtonHtml}`;
+    const finalHtml = `${email_html}<div style="margin-top:30px;text-align:center;"><a href="${responseUrl}" style="background-color:#1976d2;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;">응답하러 가기</a></div>`;
 
     const emailRecord = await Email.create({
       title,
@@ -58,14 +45,36 @@ const createAndSendEmail = async (req, res) => {
       email_html: finalHtml,
       token,
       sent_at: new Date(),
-      projectId: projectId || null, // ✅ null 허용
+      projectId: projectId || null,
     });
+
+    const savedFiles = [];
+
+    for (const file of files) {
+      const uuidName = uuidv4() + path.extname(file.originalname);
+      const destPath = path.join(__dirname, '..', 'files', uuidName)
+      fs.renameSync(file.path, destPath);
+
+      const saved = await EmailFile.create({
+        emailId: emailRecord.id,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+        localPath: destPath,
+      });
+
+      savedFiles.push({
+        filename: `=?UTF-8?B?${Buffer.from(saved.originalName).toString('base64')}?=`,
+        path: saved.localPath,
+      });
+    }
 
     await transporter.sendMail({
       from: sender,
       to: recipient,
       subject: title,
       html: finalHtml,
+      attachments: savedFiles,
     });
 
     res.status(201).json(emailRecord);
@@ -75,7 +84,7 @@ const createAndSendEmail = async (req, res) => {
   }
 };
 
-// ✅ 전체 이메일 조회 (페이지네이션)
+// ✅ 이메일 목록 조회 (페이지네이션 + hasAttachment 추가)
 const getAllEmails = async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
@@ -85,20 +94,40 @@ const getAllEmails = async (req, res) => {
     order: [['id', 'DESC']],
     limit,
     offset,
+    include: {
+      model: EmailFile,
+      as: 'files',
+      attributes: ['id'],
+    },
+  });
+
+  const emails = result.rows.map((e) => {
+    const plain = e.toJSON();
+    return {
+      ...plain,
+      hasAttachment: (plain.files || []).length > 0,
+    };
   });
 
   res.json({
     total: result.count,
     page,
     limit,
-    emails: result.rows,
+    emails,
   });
 };
 
-// ✅ 단일 이메일 상세 조회
+// ✅ 단일 이메일 조회 (첨부 포함)
 const getEmailById = async (req, res) => {
   const { id } = req.params;
-  const email = await Email.findByPk(id);
+
+  const email = await Email.findByPk(id, {
+    include: {
+      model: EmailFile,
+      as: 'files',
+      attributes: ['id', 'originalName', 'mimeType', 'size'],
+    },
+  });
 
   if (!email) {
     return res.status(404).json({ message: '해당 이메일이 없습니다.' });
@@ -110,13 +139,15 @@ const getEmailById = async (req, res) => {
 // ✅ 이메일 삭제
 const deleteEmail = async (req, res) => {
   const { id } = req.params;
-  const email = await Email.findByPk(id);
 
+  const email = await Email.findByPk(id);
   if (!email) {
     return res.status(404).json({ message: '삭제할 이메일이 없습니다.' });
   }
 
+  await EmailFile.destroy({ where: { emailId: id } });
   await email.destroy();
+
   res.json({ message: '삭제 완료' });
 };
 
