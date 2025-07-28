@@ -3,6 +3,11 @@ const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 const dotenv = require('dotenv');
+const fs = require('fs');
+const path = require('path');
+const { EmailFile } = require('../db');
+const multer = require('multer');
+const upload = multer({ dest: 'server/tmp' }); // 파일 임시 저장 폴더
 dotenv.config(); // ✅ .env 로드
 // ✅ 이메일 생성 + 전송
 const createAndSendEmail = async (req, res) => {
@@ -13,6 +18,7 @@ const createAndSendEmail = async (req, res) => {
       recipient,
       email_html,
       smtpPass,
+      projectId, // ✅ 추가된 필드
     } = req.body;
 
     if (!sender || !smtpPass) {
@@ -32,7 +38,6 @@ const createAndSendEmail = async (req, res) => {
 
     const token = uuidv4();
 
-    // ✅ 응답 링크 삽입
     const responseUrl = `${process.env.RESPONSE_URL}/respond/${token}`;
     const responseButtonHtml = `
       <div style="margin-top:30px;text-align:center;">
@@ -46,13 +51,6 @@ const createAndSendEmail = async (req, res) => {
 
     const finalHtml = `${email_html}${responseButtonHtml}`;
 
-    await transporter.sendMail({
-      from: sender,
-      to: recipient,
-      subject: title,
-      html: finalHtml,
-    });
-
     const emailRecord = await Email.create({
       title,
       sender,
@@ -60,6 +58,14 @@ const createAndSendEmail = async (req, res) => {
       email_html: finalHtml,
       token,
       sent_at: new Date(),
+      projectId: projectId || null, // ✅ null 허용
+    });
+
+    await transporter.sendMail({
+      from: sender,
+      to: recipient,
+      subject: title,
+      html: finalHtml,
     });
 
     res.status(201).json(emailRecord);

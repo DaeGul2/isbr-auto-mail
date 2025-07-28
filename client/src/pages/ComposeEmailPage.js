@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Container,
@@ -19,12 +19,15 @@ import {
   TableRow,
   TableCell,
   MobileStepper,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import KeyboardArrowLeft from '@mui/icons-material/KeyboardArrowLeft';
 import KeyboardArrowRight from '@mui/icons-material/KeyboardArrowRight';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { sendEmail } from '../services/emailService';
+import { fetchProjects, createProject } from '../services/projectService';
 
 const ComposeEmailPage = () => {
   const [columns, setColumns] = useState([]);
@@ -36,7 +39,18 @@ const ComposeEmailPage = () => {
   const [smtpDialogOpen, setSmtpDialogOpen] = useState(false);
   const [smtpInfo, setSmtpInfo] = useState({ email: '', password: '' });
   const [sendResults, setSendResults] = useState([]);
-  const quillRef = useRef(null); // ✅ Quill Editor ref
+  const [projectList, setProjectList] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [newProjectName, setNewProjectName] = useState('');
+  const quillRef = useRef(null);
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      const res = await fetchProjects(1, 100);
+      setProjectList(res.projects);
+    };
+    loadProjects();
+  }, []);
 
   const handleExcelUpload = (e) => {
     const file = e.target.files[0];
@@ -91,6 +105,10 @@ const ComposeEmailPage = () => {
   };
 
   const handleSend = () => {
+    if (!selectedProjectId) {
+      alert('📌 프로젝트를 선택해주세요.');
+      return;
+    }
     setSmtpDialogOpen(true);
   };
 
@@ -115,6 +133,7 @@ const ComposeEmailPage = () => {
           recipient,
           email_html: personalizedBody,
           smtpPass: smtpInfo.password,
+          projectId: selectedProjectId,
         });
         results.push({ row: i + 1, recipient, success: true });
       } catch (err) {
@@ -130,6 +149,7 @@ const ComposeEmailPage = () => {
     <Container maxWidth="md" sx={{ mt: 4 }}>
       <Typography variant="h4" gutterBottom>메일 작성</Typography>
 
+      {/* 엑셀 업로드 */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="subtitle1">1. 엑셀 업로드</Typography>
         <Button variant="outlined" component="label">
@@ -155,8 +175,48 @@ const ComposeEmailPage = () => {
         )}
       </Paper>
 
+      {/* 프로젝트 선택 및 생성 */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="subtitle1">2. 제목 및 본문 작성</Typography>
+        <Typography variant="subtitle1">2. 프로젝트 선택</Typography>
+
+        <Select
+          fullWidth
+          displayEmpty
+          value={selectedProjectId}
+          onChange={(e) => setSelectedProjectId(e.target.value)}
+          sx={{ mb: 2 }}
+        >
+          <MenuItem value="">(선택 안 됨)</MenuItem>
+          {projectList.map((p) => (
+            <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+          ))}
+        </Select>
+
+        <Stack direction="row" spacing={2}>
+          <TextField
+            label="새 프로젝트명"
+            value={newProjectName}
+            onChange={(e) => setNewProjectName(e.target.value)}
+            fullWidth
+          />
+          <Button
+            variant="outlined"
+            onClick={async () => {
+              if (!newProjectName.trim()) return;
+              const newP = await createProject(newProjectName.trim());
+              setProjectList((prev) => [newP, ...prev]);
+              setSelectedProjectId(newP.id);
+              setNewProjectName('');
+            }}
+          >
+            추가
+          </Button>
+        </Stack>
+      </Paper>
+
+      {/* 제목/본문 작성 */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="subtitle1">3. 제목 및 본문 작성</Typography>
         <TextField
           fullWidth
           label="제목"
@@ -193,6 +253,7 @@ const ComposeEmailPage = () => {
         </Button>
       </Stack>
 
+      {/* 미리보기 */}
       {previewOpen && (
         <Paper sx={{ p: 3, mt: 4 }}>
           <Typography variant="subtitle1">
@@ -229,6 +290,7 @@ const ComposeEmailPage = () => {
         </Paper>
       )}
 
+      {/* SMTP 다이얼로그 */}
       <Dialog open={smtpDialogOpen} onClose={() => setSmtpDialogOpen(false)}>
         <DialogTitle>이메일 로그인 정보 입력</DialogTitle>
         <DialogContent>
@@ -254,6 +316,7 @@ const ComposeEmailPage = () => {
         </DialogActions>
       </Dialog>
 
+      {/* 전송 결과 */}
       {sendResults.length > 0 && (
         <Paper sx={{ mt: 4, p: 2 }}>
           <Typography variant="h6">전송 결과</Typography>

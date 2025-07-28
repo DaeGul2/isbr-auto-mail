@@ -45,9 +45,18 @@ module.exports = (sequelize) => {
       allowNull: false,
       unique: true,
     },
+    projectId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'projects',
+        key: 'id',
+      },
+      onDelete: 'SET NULL',
+    },
   }, {
     tableName: 'emails',
-    timestamps: false, // createdAt, updatedAt 자동 생성 X
+    timestamps: false,
   });
 
   return Email;

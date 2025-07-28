@@ -7,6 +7,7 @@ const { connectDB } = require('./db');
 
 const emailRoutes = require('./routes/emailRoutes');
 const emailResponseRoutes = require('./routes/emailResponseRoutes');
+const projectRoutes = require('./routes/projectRoutes');
 
 dotenv.config();
 
@@ -25,7 +26,7 @@ app.use('/api', authMiddleware);
 
 // ✅ 보호된 API들
 app.use('/api/emails', emailRoutes);
-
+app.use('/api/projects',projectRoutes);
 
 // 🔐 보호된 테스트용 예시 라우트
 app.get('/api/protected', (req, res) => {

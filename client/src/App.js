@@ -6,6 +6,8 @@ import ComposeEmailPage from './pages/ComposeEmailPage';
 import EmailDetailModal from './components/EmailDetailModal';
 import PrivateRoute from './components/PrivateRoute';
 import Layout from './components/Layout'; // ✅ 공통 레이아웃 추가
+import EmailsPerProjectPage from './pages/EmailsPerProjectPage';
+import ProjectSettingsPage from './pages/ProjectSettingsPage';
 
 function App() {
   return (
@@ -21,6 +23,8 @@ function App() {
             <Route path="/" element={<SentEmailsPage />} />
             <Route path="/emails/:id" element={<EmailDetailModal />} />
             <Route path="/compose" element={<ComposeEmailPage />} />
+            <Route path="/projects-emails" element={<EmailsPerProjectPage />} />
+            <Route path="/projects" element={<ProjectSettingsPage />} />
           </Route>
         </Route>
 
