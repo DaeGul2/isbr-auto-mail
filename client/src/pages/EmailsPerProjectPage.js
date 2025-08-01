@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import {
   Box,
   Button,
+  Checkbox,
   Container,
   List,
   ListItemButton,
@@ -20,8 +21,9 @@ import {
   MenuItem,
 } from '@mui/material';
 import { fetchProjects, fetchEmailsByProject } from '../services/projectService';
-import API from '../services/api';
+import { deleteEmail } from '../services/emailService';
 import { useNavigate } from 'react-router-dom';
+import API from '../services/api';
 
 const EmailsPerProjectPage = () => {
   const [projects, setProjects] = useState([]);
@@ -31,6 +33,7 @@ const EmailsPerProjectPage = () => {
   const [pagination, setPagination] = useState({ page: 0, rowsPerPage: 20, total: 0 });
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('전체');
+  const [selectedEmailIds, setSelectedEmailIds] = useState([]);
 
   const navigate = useNavigate();
 
@@ -71,6 +74,27 @@ const EmailsPerProjectPage = () => {
     } catch (err) {
       alert('상태 변경 실패');
     }
+  };
+
+  const handleSelect = (id) => {
+    setSelectedEmailIds((prev) =>
+      prev.includes(id) ? prev.filter((eid) => eid !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedEmailIds.length === 0) return;
+    if (!window.confirm(`정말 ${selectedEmailIds.length}개 메일을 삭제하시겠습니까?`)) return;
+
+    await Promise.all(selectedEmailIds.map((id) => deleteEmail(id)));
+    setSelectedEmailIds([]);
+    loadProjects();
+  };
+
+  const handleDeleteSingle = async (id) => {
+    if (!window.confirm('정말 삭제하시겠습니까?')) return;
+    await deleteEmail(id);
+    loadProjects();
   };
 
   const filteredProjects = useMemo(() => {
@@ -134,7 +158,7 @@ const EmailsPerProjectPage = () => {
 
         {/* 이메일 목록 */}
         <Box sx={{ flexGrow: 1 }}>
-          <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 1 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
             <Select
               size="small"
               value={statusFilter}
@@ -146,24 +170,41 @@ const EmailsPerProjectPage = () => {
               <MenuItem value="수락">수락</MenuItem>
               <MenuItem value="거절">거절</MenuItem>
             </Select>
+
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              disabled={selectedEmailIds.length === 0}
+              onClick={handleDeleteSelected}
+            >
+              선택 삭제
+            </Button>
           </Stack>
 
           <Paper>
             <Table>
               <TableHead>
                 <TableRow>
+                  <TableCell padding="checkbox" />
                   <TableCell>제목</TableCell>
                   <TableCell>이메일</TableCell>
                   <TableCell>수신자</TableCell>
                   <TableCell>상태</TableCell>
-                  <TableCell>응답</TableCell>
+
                   <TableCell>보낸시각</TableCell>
-                  <TableCell>작업</TableCell> {/* ✅ NEW */}
+                  <TableCell>작업</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {emails.map((email) => (
                   <TableRow key={email.id} hover>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={selectedEmailIds.includes(email.id)}
+                        onChange={() => handleSelect(email.id)}
+                      />
+                    </TableCell>
                     <TableCell>
                       {email.title.length > 10 ? `${email.title.slice(0, 10)}...` : email.title}
                       {email.files?.length > 0 && '📎'}
@@ -181,16 +222,25 @@ const EmailsPerProjectPage = () => {
                         <MenuItem value="거절">거절</MenuItem>
                       </Select>
                     </TableCell>
-                    <TableCell>{email.comment || '-'}</TableCell>
+
                     <TableCell>{email.sent_at ? new Date(email.sent_at).toLocaleString('ko-KR') : '-'}</TableCell>
                     <TableCell>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => navigate(`/emails/${email.id}`)}
-                      >
-                        자세히 보기
-                      </Button>
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => navigate(`/emails/${email.id}`)}
+                        >
+                          자세히
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteSingle(email.id)}
+                        >
+                          삭제
+                        </Button>
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 ))}
