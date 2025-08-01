@@ -176,10 +176,15 @@ const ComposeEmailPage = () => {
       {/* 엑셀 업로드 */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="subtitle1">1. 엑셀 업로드</Typography>
-        <Button variant="outlined" component="label">
-          엑셀 파일 선택
-          <input type="file" hidden accept=".xlsx, .xls" onChange={handleExcelUpload} />
-        </Button>
+        <Stack direction="row" spacing={2}>
+          <Button variant="outlined" component="label">
+            엑셀 파일 선택
+            <input type="file" hidden accept=".xlsx, .xls" onChange={handleExcelUpload} />
+          </Button>
+          <a href="/template.xlsx" download>
+            <Button variant="outlined">양식 다운로드</Button>
+          </a>
+        </Stack>
         {columns.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2">사용 가능한 변수 태그:</Typography>
