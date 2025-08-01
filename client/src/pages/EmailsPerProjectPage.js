@@ -16,28 +16,29 @@ import {
   Typography,
   Stack,
   TextField,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import { fetchProjects, fetchEmailsByProject } from '../services/projectService';
+import API from '../services/api';
 import { useNavigate } from 'react-router-dom';
 
 const EmailsPerProjectPage = () => {
   const [projects, setProjects] = useState([]);
-  const [emailsByProject, setEmailsByProject] = useState({}); // id → 이메일 배열
+  const [emailsByProject, setEmailsByProject] = useState({});
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [emails, setEmails] = useState([]);
   const [pagination, setPagination] = useState({ page: 0, rowsPerPage: 20, total: 0 });
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('전체');
 
   const navigate = useNavigate();
 
   const loadProjects = async () => {
     const res = await fetchProjects(1, 1000);
     setProjects(res.projects);
-    if (res.projects.length > 0) {
-      setSelectedProjectId(res.projects[0].id);
-    }
+    if (res.projects.length > 0) setSelectedProjectId(res.projects[0].id);
 
-    // 프로젝트별 메일 미리 조회
     const emailMap = {};
     for (const p of res.projects) {
       const res = await fetchEmailsByProject(p.id, 1, 1000);
@@ -52,13 +53,25 @@ const EmailsPerProjectPage = () => {
 
   useEffect(() => {
     if (selectedProjectId && emailsByProject[selectedProjectId]) {
-      const all = emailsByProject[selectedProjectId];
+      let all = emailsByProject[selectedProjectId];
+      if (statusFilter !== '전체') {
+        all = all.filter((e) => e.status === statusFilter);
+      }
       const offset = pagination.page * pagination.rowsPerPage;
       const paged = all.slice(offset, offset + pagination.rowsPerPage);
       setEmails(paged);
       setPagination((p) => ({ ...p, total: all.length }));
     }
-  }, [selectedProjectId, emailsByProject, pagination.page, pagination.rowsPerPage]);
+  }, [selectedProjectId, emailsByProject, pagination.page, pagination.rowsPerPage, statusFilter]);
+
+  const handleStatusChange = async (emailId, newStatus) => {
+    try {
+      await API.patch(`/emails/${emailId}`, { status: newStatus });
+      loadProjects(); // refresh
+    } catch (err) {
+      alert('상태 변경 실패');
+    }
+  };
 
   const filteredProjects = useMemo(() => {
     return projects
@@ -78,9 +91,7 @@ const EmailsPerProjectPage = () => {
     <Container sx={{ mt: 4 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
         <Typography variant="h5">📁 프로젝트별 메일함</Typography>
-        <Button variant="contained" onClick={() => navigate('/compose')}>
-          ✉ 메일 작성
-        </Button>
+        <Button variant="contained" onClick={() => navigate('/compose')}>✉ 메일 작성</Button>
       </Stack>
 
       <Box sx={{ display: 'flex', gap: 2 }}>
@@ -123,33 +134,63 @@ const EmailsPerProjectPage = () => {
 
         {/* 이메일 목록 */}
         <Box sx={{ flexGrow: 1 }}>
+          <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 1 }}>
+            <Select
+              size="small"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              sx={{ minWidth: 120 }}
+            >
+              <MenuItem value="전체">전체</MenuItem>
+              <MenuItem value="대기">대기</MenuItem>
+              <MenuItem value="수락">수락</MenuItem>
+              <MenuItem value="거절">거절</MenuItem>
+            </Select>
+          </Stack>
+
           <Paper>
             <Table>
               <TableHead>
                 <TableRow>
                   <TableCell>제목</TableCell>
+                  <TableCell>이메일</TableCell>
                   <TableCell>수신자</TableCell>
                   <TableCell>상태</TableCell>
                   <TableCell>응답</TableCell>
                   <TableCell>보낸시각</TableCell>
+                  <TableCell>작업</TableCell> {/* ✅ NEW */}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {emails.map((email) => (
-                  <TableRow
-                    key={email.id}
-                    hover
-                    sx={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/emails/${email.id}`)}
-                  >
-                    <TableCell>{email.title}{email.files?.length > 0 && '📎'}</TableCell>
-                    <TableCell>{email.recipient}</TableCell>
-                    <TableCell>{email.status}</TableCell>
-                    <TableCell>{email.comment || '-'}</TableCell>
+                  <TableRow key={email.id} hover>
                     <TableCell>
-                      {email.sent_at
-                        ? new Date(email.sent_at).toLocaleString('ko-KR')
-                        : '-'}
+                      {email.title.length > 10 ? `${email.title.slice(0, 10)}...` : email.title}
+                      {email.files?.length > 0 && '📎'}
+                    </TableCell>
+                    <TableCell>{email.recipient}</TableCell>
+                    <TableCell>{email.recipientName || '-'}</TableCell>
+                    <TableCell>
+                      <Select
+                        size="small"
+                        value={email.status}
+                        onChange={(e) => handleStatusChange(email.id, e.target.value)}
+                      >
+                        <MenuItem value="대기">대기</MenuItem>
+                        <MenuItem value="수락">수락</MenuItem>
+                        <MenuItem value="거절">거절</MenuItem>
+                      </Select>
+                    </TableCell>
+                    <TableCell>{email.comment || '-'}</TableCell>
+                    <TableCell>{email.sent_at ? new Date(email.sent_at).toLocaleString('ko-KR') : '-'}</TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => navigate(`/emails/${email.id}`)}
+                      >
+                        자세히 보기
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

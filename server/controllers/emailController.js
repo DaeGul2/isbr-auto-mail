@@ -13,6 +13,7 @@ const createAndSendEmail = async (req, res) => {
       title,
       sender,
       recipient,
+      recipientName,
       email_html,
       smtpPass,
       projectId,
@@ -36,12 +37,14 @@ const createAndSendEmail = async (req, res) => {
 
     const token = uuidv4();
     const responseUrl = `${process.env.RESPONSE_URL}/respond/${token}`;
-    const finalHtml = `${email_html}<div style="margin-top:30px;text-align:center;"><a href="${responseUrl}" style="background-color:#1976d2;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;">응답하러 가기</a></div>`;
+    // const finalHtml = `${email_html}<div style="margin-top:30px;text-align:center;"><a href="${responseUrl}" style="background-color:#1976d2;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;">응답하러 가기</a></div>`;
+    const finalHtml = `${email_html}`;
 
     const emailRecord = await Email.create({
       title,
       sender,
       recipient,
+      recipientName,
       email_html: finalHtml,
       token,
       sent_at: new Date(),
@@ -151,9 +154,31 @@ const deleteEmail = async (req, res) => {
   res.json({ message: '삭제 완료' });
 };
 
+
+const updateEmailStatus = async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (!['대기', '수락', '거절'].includes(status)) {
+    return res.status(400).json({ message: '유효하지 않은 상태값입니다.' });
+  }
+
+  const email = await Email.findByPk(id);
+  if (!email) {
+    return res.status(404).json({ message: '이메일을 찾을 수 없습니다.' });
+  }
+
+  email.status = status;
+  await email.save();
+
+  res.json({ message: '상태가 성공적으로 변경되었습니다.', email });
+};
+
+
 module.exports = {
   createAndSendEmail,
   getAllEmails,
   getEmailById,
   deleteEmail,
+  updateEmailStatus
 };

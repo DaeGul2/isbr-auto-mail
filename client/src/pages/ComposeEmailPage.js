@@ -21,12 +21,18 @@ const ComposeEmailPage = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [smtpDialogOpen, setSmtpDialogOpen] = useState(false);
-  const [smtpInfo, setSmtpInfo] = useState({ email: '', password: '' });
+  const [smtpInfo, setSmtpInfo] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    save: false,
+  });
+  const [showPassword, setShowPassword] = useState(false);
   const [sendResults, setSendResults] = useState([]);
   const [projectList, setProjectList] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [newProjectName, setNewProjectName] = useState('');
-  const [attachments, setAttachments] = useState([]); // ✅ 첨부파일
+  const [attachments, setAttachments] = useState([]);
   const quillRef = useRef(null);
 
   useEffect(() => {
@@ -35,6 +41,17 @@ const ComposeEmailPage = () => {
       setProjectList(res.projects);
     };
     loadProjects();
+
+    const savedEmail = localStorage.getItem('smtp_email');
+    const savedPassword = localStorage.getItem('smtp_password');
+    if (savedEmail && savedPassword) {
+      setSmtpInfo({
+        email: savedEmail,
+        password: savedPassword,
+        confirmPassword: savedPassword,
+        save: true,
+      });
+    }
   }, []);
 
   const handleExcelUpload = (e) => {
@@ -51,7 +68,9 @@ const ComposeEmailPage = () => {
 
       if (!headers.includes('email')) {
         alert('"email" 컬럼이 필수입니다.');
-        setColumns([]); setExcelData([]); return;
+        setColumns([]);
+        setExcelData([]);
+        return;
       }
 
       setColumns(headers);
@@ -100,9 +119,24 @@ const ComposeEmailPage = () => {
   };
 
   const confirmSend = async () => {
-    if (!smtpInfo.email || !smtpInfo.password) {
-      alert('이메일과 비밀번호를 입력해주세요.');
+    const { email, password, confirmPassword, save } = smtpInfo;
+
+    if (!email || !password || !confirmPassword) {
+      alert('이메일과 비밀번호를 모두 입력해주세요.');
       return;
+    }
+
+    if (password !== confirmPassword) {
+      alert('비밀번호와 재입력 값이 일치하지 않습니다.');
+      return;
+    }
+
+    if (save) {
+      localStorage.setItem('smtp_email', email);
+      localStorage.setItem('smtp_password', password);
+    } else {
+      localStorage.removeItem('smtp_email');
+      localStorage.removeItem('smtp_password');
     }
 
     const results = [];
@@ -112,16 +146,18 @@ const ComposeEmailPage = () => {
       const personalizedTitle = applyTemplate(title, row, columns);
       const personalizedBody = applyTemplate(body, row, columns);
       const recipient = row[columns.indexOf('email')];
+      const recipientName = row[columns.indexOf('이름')];
 
       try {
         await sendEmail({
           title: personalizedTitle,
-          sender: smtpInfo.email,
+          sender: email,
           recipient,
+          recipientName,
           email_html: personalizedBody,
-          smtpPass: smtpInfo.password,
+          smtpPass: password,
           projectId: selectedProjectId,
-        }, attachments); // ✅ 파일 포함
+        }, attachments);
 
         results.push({ row: i + 1, recipient, success: true });
       } catch (err) {
@@ -190,12 +226,7 @@ const ComposeEmailPage = () => {
       {/* 제목/본문 + 첨부 */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="subtitle1">3. 제목 및 본문 작성</Typography>
-        <TextField
-          fullWidth label="제목"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          sx={{ mb: 2 }}
-        />
+        <TextField fullWidth label="제목" value={title} onChange={(e) => setTitle(e.target.value)} sx={{ mb: 2 }} />
         <ReactQuill
           ref={quillRef}
           value={body}
@@ -205,8 +236,6 @@ const ComposeEmailPage = () => {
           }}
           style={{ height: 250, marginBottom: 20 }}
         />
-
-        {/* ✅ 파일 첨부 */}
         <Typography variant="subtitle1">📎 첨부파일</Typography>
         <Button component="label" variant="outlined">
           파일 선택
@@ -249,7 +278,39 @@ const ComposeEmailPage = () => {
         <DialogTitle>이메일 로그인 정보</DialogTitle>
         <DialogContent>
           <TextField fullWidth margin="dense" label="이메일" value={smtpInfo.email} onChange={(e) => setSmtpInfo((p) => ({ ...p, email: e.target.value }))} />
-          <TextField fullWidth type="password" margin="dense" label="비밀번호" value={smtpInfo.password} onChange={(e) => setSmtpInfo((p) => ({ ...p, password: e.target.value }))} />
+          <TextField
+            fullWidth
+            type={showPassword ? 'text' : 'password'}
+            margin="dense"
+            label="비밀번호"
+            value={smtpInfo.password}
+            onChange={(e) => setSmtpInfo((p) => ({ ...p, password: e.target.value }))}
+            InputProps={{
+              endAdornment: (
+                <Button onClick={() => setShowPassword((v) => !v)}>
+                  {showPassword ? '숨김' : '표시'}
+                </Button>
+              ),
+            }}
+          />
+          <TextField
+            fullWidth
+            type={showPassword ? 'text' : 'password'}
+            margin="dense"
+            label="비밀번호 재입력"
+            value={smtpInfo.confirmPassword}
+            onChange={(e) => setSmtpInfo((p) => ({ ...p, confirmPassword: e.target.value }))}
+          />
+          <Box sx={{ mt: 1 }}>
+            <label>
+              <input
+                type="checkbox"
+                checked={smtpInfo.save}
+                onChange={(e) => setSmtpInfo((p) => ({ ...p, save: e.target.checked }))}
+              />
+              이메일/비밀번호 저장
+            </label>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSmtpDialogOpen(false)}>취소</Button>
