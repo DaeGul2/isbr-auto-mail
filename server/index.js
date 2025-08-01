@@ -6,6 +6,7 @@ const authMiddleware = require('./middlewares/authMiddleware');
 const { connectDB } = require('./db');
 
 const emailRoutes = require('./routes/emailRoutes');
+const emailFileRoutes = require('./routes/emailFileRoutes'); // ✅ 추가
 const emailResponseRoutes = require('./routes/emailResponseRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 
@@ -27,7 +28,7 @@ app.use('/api', authMiddleware);
 // ✅ 보호된 API들
 app.use('/api/emails', emailRoutes);
 app.use('/api/projects',projectRoutes);
-
+app.use('/api/email-files', emailFileRoutes); // ✅ 이 줄 추가
 // 🔐 보호된 테스트용 예시 라우트
 app.get('/api/protected', (req, res) => {
   res.json({ message: '인증된 사용자만 접근 가능합니다.' });

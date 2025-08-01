@@ -54,21 +54,24 @@ const createAndSendEmail = async (req, res) => {
     const savedFiles = [];
 
     for (const file of files) {
-      const uuidName = uuidv4() + path.extname(file.originalname);
-      const destPath = path.join(__dirname, '..', 'files', uuidName)
+      // ✅ 한글 파일명 깨짐 방지
+      const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
+      const uuidName = uuidv4() + path.extname(originalName);
+      const destPath = path.join(__dirname, '..', 'files', uuidName);
       fs.renameSync(file.path, destPath);
 
       const saved = await EmailFile.create({
         emailId: emailRecord.id,
-        originalName: file.originalname,
+        originalName, // ✅ 수정된 이름 저장
         mimeType: file.mimetype,
         size: file.size,
         localPath: destPath,
       });
 
       savedFiles.push({
-        filename: `=?UTF-8?B?${Buffer.from(saved.originalName).toString('base64')}?=`,
-        path: saved.localPath,
+        filename: originalName,
+        path: destPath,
       });
     }
 
@@ -77,7 +80,13 @@ const createAndSendEmail = async (req, res) => {
       to: recipient,
       subject: title,
       html: finalHtml,
-      attachments: savedFiles,
+      attachments: savedFiles.map((f) => ({
+        filename: f.filename, // 한글 포함된 이름
+        path: f.path,
+        encoding: 'base64',
+        contentDisposition: 'attachment',
+        contentType: f.mimeType,
+      })),
     });
 
     res.status(201).json(emailRecord);

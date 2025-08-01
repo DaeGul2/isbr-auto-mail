@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchEmailById } from '../services/emailService';
+import { downloadFile } from '../services/fileService';
+import {
+Button,
+} from '@mui/material';
 
 const EmailDetailModal = () => {
   const { id } = useParams();
@@ -28,9 +32,9 @@ const EmailDetailModal = () => {
           <ul>
             {email.files.map((f) => (
               <li key={f.id}>
-                <a href={`/api/email-files/${f.id}/download`} target="_blank" rel="noreferrer">
+                <Button size="small" onClick={() => downloadFile(f.id)}>
                   {f.originalName}
-                </a>
+                </Button>
               </li>
             ))}
           </ul>

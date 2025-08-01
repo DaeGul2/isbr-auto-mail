@@ -11,15 +11,15 @@ const LayoutBar = () => {
           이메일 자동화 시스템
         </Typography>
         <Stack direction="row" spacing={2}>
-          <Button color="inherit" onClick={() => navigate('/')}>
+          {/* <Button color="inherit" onClick={() => navigate('/')}>
             전체 이메일
-          </Button>
+          </Button> */}
           <Button color="inherit" onClick={() => navigate('/projects-emails')}>
             프로젝트별 이메일
           </Button>
-          <Button color="inherit" onClick={() => navigate('/projects')}>
+          {/* <Button color="inherit" onClick={() => navigate('/projects')}>
             프로젝트 설정
-          </Button>
+          </Button> */}
         </Stack>
       </Toolbar>
     </AppBar>
